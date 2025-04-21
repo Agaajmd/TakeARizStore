@@ -43,6 +43,14 @@ export default function CartItem({ item }: CartItemProps) {
       <div className="flex-grow">
         <h3 className="font-medium text-lg">{item.name}</h3>
         <p className="text-gray-600 dark:text-gray-400 text-sm mb-2">Rp {price.toLocaleString()}</p>
+        {/* Add customization options display */}
+        {(item.color || item.size || item.material) && (
+          <div className="text-xs text-gray-500 mb-2">
+            {item.color && <span className="mr-2">Color: {item.color}</span>}
+            {item.size && <span className="mr-2">Size: {item.size}</span>}
+            {item.material && <span>Material: {item.material}</span>}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center mt-4 sm:mt-0">

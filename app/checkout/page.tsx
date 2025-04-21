@@ -2,18 +2,20 @@
 
 import type React from "react"
 
+import { useState } from "react"
 import { motion } from "framer-motion"
 import { useCart } from "@/context/cart-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
-import { ShoppingBag } from "lucide-react"
+import { ShoppingBag, CreditCard } from "lucide-react"
 import Link from "next/link"
+import { useSession } from "next-auth/react"
 
 export default function CheckoutPage() {
-  const { cart, totalPrice, setCustomerInfo } = useCart()
+  const { data: session, status } = useSession()
+  const { cart, totalPrice, clearCart } = useCart()
   const router = useRouter()
   const [formData, setFormData] = useState({
     name: "",
@@ -21,19 +23,70 @@ export default function CheckoutPage() {
     address: "",
     phone: "",
   })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState("")
 
   // Ensure totalPrice is a valid number
   const safeTotalPrice = typeof totalPrice === "number" && !isNaN(totalPrice) ? totalPrice : 0
+
+  // Calculate 50% upfront payment
+  const upfrontPayment = safeTotalPrice * 0.5
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setCustomerInfo(formData)
-    router.push("/invoice")
+
+    if (status !== "authenticated") {
+      router.push("/auth/login?callbackUrl=/checkout")
+      return
+    }
+
+    setIsSubmitting(true)
+    setError("")
+
+    try {
+      // Prepare order items with customization options
+      const orderItems = cart.map((item) => ({
+        productId: item.id,
+        quantity: item.quantity,
+        color: item.color,
+        size: item.size,
+        material: item.material,
+      }))
+
+      // Create order
+      const response = await fetch("/api/orders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          items: orderItems,
+          paidAmount: upfrontPayment,
+          totalAmount: safeTotalPrice,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || "Failed to create order")
+      }
+
+      const order = await response.json()
+
+      // Clear cart and redirect to order confirmation
+      clearCart()
+      router.push(`/orders/${order.id}/confirmation`)
+    } catch (error) {
+      console.error("Checkout error:", error)
+      setError(error instanceof Error ? error.message : "An error occurred during checkout")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   if (cart.length === 0) {
@@ -58,6 +111,25 @@ export default function CheckoutPage() {
     )
   }
 
+  if (status === "unauthenticated") {
+    return (
+      <main className="container mx-auto px-4 py-12">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.5 }}
+          className="text-center py-16"
+        >
+          <h2 className="text-2xl font-semibold mb-4">Please login to continue</h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-8">You need to be logged in to complete your purchase.</p>
+          <Button asChild size="lg">
+            <Link href="/auth/login?callbackUrl=/checkout">Login</Link>
+          </Button>
+        </motion.div>
+      </main>
+    )
+  }
+
   return (
     <main className="container mx-auto px-4 py-12">
       <motion.div
@@ -72,7 +144,13 @@ export default function CheckoutPage() {
         </p>
       </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      {error && (
+        <div className="bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-4 rounded-md mb-6 max-w-3xl mx-auto">
+          {error}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
         <div className="lg:col-span-2">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -132,8 +210,26 @@ export default function CheckoutPage() {
                 />
               </div>
 
-              <Button type="submit" className="w-full" size="lg">
-                Complete Order
+              <div className="pt-4 border-t">
+                <h3 className="text-lg font-semibold mb-4">Payment Information</h3>
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-md mb-4">
+                  <p className="text-sm text-yellow-800 dark:text-yellow-400">
+                    <strong>Note:</strong> This is a pre-order. You will pay 50% upfront (Rp{" "}
+                    {upfrontPayment.toLocaleString()}) and the remaining balance upon delivery.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between p-4 border rounded-md mb-4">
+                  <div className="flex items-center">
+                    <CreditCard className="h-5 w-5 mr-2 text-gray-500" />
+                    <span>Bank Transfer</span>
+                  </div>
+                  <span className="text-sm bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">BRI: 8776234423</span>
+                </div>
+              </div>
+
+              <Button type="submit" className="w-full" size="lg" disabled={isSubmitting}>
+                {isSubmitting ? "Processing..." : `Pay Rp ${upfrontPayment.toLocaleString()} Now`}
               </Button>
             </form>
           </motion.div>
@@ -160,9 +256,14 @@ export default function CheckoutPage() {
 
                 return (
                   <div key={item.id} className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">
-                      {item.name} x {quantity}
-                    </span>
+                    <div>
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {item.name} x {quantity}
+                      </span>
+                      {item.color && <span className="block text-xs text-gray-500">Color: {item.color}</span>}
+                      {item.size && <span className="block text-xs text-gray-500">Size: {item.size}</span>}
+                      {item.material && <span className="block text-xs text-gray-500">Material: {item.material}</span>}
+                    </div>
                     <span>Rp {safeSubtotal.toLocaleString()}</span>
                   </div>
                 )
@@ -182,6 +283,14 @@ export default function CheckoutPage() {
                 <div className="flex justify-between font-semibold">
                   <span>Total</span>
                   <span>Rp {safeTotalPrice.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm mt-2">
+                  <span className="text-gray-600 dark:text-gray-400">Upfront Payment (50%)</span>
+                  <span className="font-medium">Rp {upfrontPayment.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600 dark:text-gray-400">Remaining Payment</span>
+                  <span>Rp {upfrontPayment.toLocaleString()}</span>
                 </div>
               </div>
             </div>

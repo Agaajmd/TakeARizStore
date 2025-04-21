@@ -18,6 +18,16 @@ export default function ProductCard({ product }: ProductCardProps) {
   // Ensure price is a valid number
   const price = typeof product.price === "number" && !isNaN(product.price) ? product.price : 0
 
+  // Update the addToCart function to only add to cart without customization options
+  // This will be a "quick add" - users can customize in the product detail page
+  const handleAddToCart = () => {
+    addToCart({
+      ...product,
+      quantity: 1,
+      // Don't add customization options here - they'll be added in the product detail page
+    })
+  }
+
   return (
     <>
       <Card className="overflow-hidden group">
@@ -44,7 +54,7 @@ export default function ProductCard({ product }: ProductCardProps) {
           <p className="text-sm text-gray-500 dark:text-gray-500 line-clamp-2">{product.description}</p>
         </CardContent>
         <CardFooter>
-          <Button className="w-full" onClick={() => addToCart({ ...product, quantity: 1 })}>
+          <Button className="w-full" onClick={handleAddToCart}>
             <ShoppingBag className="mr-2 h-4 w-4" /> Add to Cart
           </Button>
         </CardFooter>

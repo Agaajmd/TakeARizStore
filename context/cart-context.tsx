@@ -3,9 +3,17 @@
 import { createContext, useContext, useState, type ReactNode } from "react"
 import type { Product, CartItem, CustomerInfo } from "@/types/types"
 
+// Update the CartItem interface to include customization options
+// interface CartItem extends Product {
+//   quantity: number;
+//   color?: string;
+//   size?: string;
+//   material?: string;
+// }
+
 interface CartContextType {
   cart: CartItem[]
-  addToCart: (product: Product & { quantity: number }) => void
+  addToCart: (product: Product & { quantity: number; color?: string; size?: string; material?: string }) => void
   updateQuantity: (id: string, quantity: number) => void
   removeFromCart: (id: string) => void
   clearCart: () => void
@@ -20,7 +28,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([])
   const [customerInfo, setCustomerInfo] = useState<CustomerInfo | null>(null)
 
-  const addToCart = (product: Product & { quantity: number }) => {
+  // Make sure the addToCart function accepts these new properties
+  const addToCart = (product: Product & { quantity: number; color?: string; size?: string; material?: string }) => {
     // Ensure price and quantity are valid numbers
     const safeProduct = {
       ...product,
@@ -29,11 +38,21 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
 
     setCart((prevCart) => {
-      const existingItem = prevCart.find((item) => item.id === safeProduct.id)
+      // Check if the same product with the same customization exists
+      const existingItem = prevCart.find(
+        (item) =>
+          item.id === safeProduct.id &&
+          item.color === safeProduct.color &&
+          item.size === safeProduct.size &&
+          item.material === safeProduct.material,
+      )
 
       if (existingItem) {
         return prevCart.map((item) =>
-          item.id === safeProduct.id
+          item.id === safeProduct.id &&
+          item.color === safeProduct.color &&
+          item.size === safeProduct.size &&
+          item.material === safeProduct.material
             ? {
                 ...item,
                 quantity:
