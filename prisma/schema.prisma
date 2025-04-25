@@ -3,6 +3,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["referentialIntegrity"]
 }
 
 datasource db {
@@ -48,9 +49,10 @@ model Order {
   user        User        @relation(fields: [userId], references: [id])
   items       OrderItem[]
   totalAmount Float
+  paidAmount  Float       @default(0)
   status      OrderStatus @default(PENDING)
-  address     String
-  phone       String
+  address     String?
+  phone       String?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   invoiceId   String?     @unique
@@ -79,14 +81,15 @@ model OrderItem {
 }
 
 model Invoice {
-  id          String   @id @default(cuid())
-  orderId     String   @unique
-  order       Order    @relation(fields: [orderId], references: [id])
-  amount      Float
-  status      InvoiceStatus @default(UNPAID)
-  paidAt      DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String        @id @default(cuid())
+  invoiceNumber String        @unique
+  orderId       String        @unique
+  order         Order         @relation(fields: [orderId], references: [id])
+  dueDate       DateTime
+  status        InvoiceStatus @default(UNPAID)
+  paidAt        DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 }
 
 enum InvoiceStatus {
